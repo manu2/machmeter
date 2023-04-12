@@ -120,6 +120,9 @@ module "gke" {
   grant_registry_access    = true
   remove_default_node_pool = false
   create_service_account   = false
+  node_metadata            = "GKE_METADATA"
+  identity_namespace = "${var.gcp_project}.svc.id.goog"
+
   node_pools = [
     {
       name                      = "default-node-pool"
@@ -149,6 +152,74 @@ module "gke" {
   }
 }
 
+#module "workload_identity" {
+#  source              = "terraform-google-modules/kubernetes-engine/google//modules/workload-identity"
+#  project_id          = var.gcp_project
+#  name                = "kubesa-test-autocreate"
+#  namespace           = var.gke_config.namespace
+#  use_existing_k8s_sa = false
+#}
+
+#resource "google_service_account" "custom" {
+#  account_id = "agrawalmanu-machmeter-test"
+#  project    = var.gcp_project
+#}
+#
+#module "workload_identity_existing_gsa" {
+#  source              = "terraform-google-modules/kubernetes-engine/google//modules/workload-identity"
+#  project_id          = var.gcp_project
+#  name                = google_service_account.custom.account_id
+#  use_existing_gcp_sa = true
+#  # wait till custom GSA is created to force module data source read during apply
+#  # https://github.com/terraform-google-modules/terraform-google-kubernetes-engine/issues/1059
+#  depends_on = [google_service_account.custom]
+#}
+
+resource "google_service_account" "app-service-account" {
+  account_id = "machmeter-gsa-new"
+  project    = var.gcp_project
+}
+
+resource "kubernetes_service_account" "k8s-service-account" {
+  automount_service_account_token = true
+  metadata {
+    name      = "machmeter-ksa-new"
+    namespace = var.gke_config.namespace
+    annotations = {
+      "iam.gke.io/gcp-service-account" : "${google_service_account.app-service-account.email}"
+    }
+  }
+}
+
+data "google_iam_policy" "spanner-policy" {
+  binding {
+    role = "roles/iam.workloadIdentityUser"
+    members = [
+      "serviceAccount:${var.gcp_project}.svc.id.goog[${var.gke_config.namespace}/${kubernetes_service_account.k8s-service-account.metadata[0].name}]"
+    ]
+  }
+}
+
+resource "google_service_account_iam_policy" "app-service-account-iam" {
+  service_account_id = google_service_account.app-service-account.name
+  policy_data        = data.google_iam_policy.spanner-policy.policy_data
+}
+
+data "google_iam_policy" "database-reader-policy" {
+  binding {
+    role = "roles/owner"
+    members = [
+      "serviceAccount:${google_service_account.app-service-account.email}"
+    ]
+  }
+}
+
+resource "google_spanner_database_iam_policy" "database" {
+  instance    = google_spanner_instance.instance.name
+  database    = google_spanner_database.database.name
+  policy_data = data.google_iam_policy.database-reader-policy.policy_data
+}
+
 resource "google_spanner_instance" "instance" {
   name             = var.spanner_config.instance_name  # << be careful changing this in production
   config           = var.spanner_config.configuration
@@ -170,15 +241,19 @@ resource "kubernetes_namespace" "namespace" {
   }
 }
 
-resource "kubernetes_secret" "service_account" {
-  metadata {
-    name      = "sa-key"
-    namespace = kubernetes_namespace.namespace.metadata.0.name
-  }
-  data = {
-    "key.json" = file("${var.gke_config.service_account_json}")
-  }
-}
+#resource "kubernetes_secret" "service_account" {
+#  metadata {
+#    name      = "sa-key"
+#    namespace = kubernetes_namespace.namespace.metadata.0.name
+#  }
+#  data = {
+#    "key.json" = file("${var.gke_config.service_account_json}")f
+#  }
+#}
+
+#resource "google_service_account" "service_account" {
+#  account_id = "kubesa"
+#}
 
 resource "kubernetes_config_map" "configmap_jmeter_load_test" {
   metadata {
@@ -292,16 +367,8 @@ resource "kubernetes_deployment" "jmeter-master" {
             name       = "loadtest"
             sub_path = "load_test"
           }
-          volume_mount {
-            mount_path = "/var/secrets/google"
-            name       = "google-cloud-key"
-          }
           port {
             container_port = 60000
-          }
-          env {
-            name = "GOOGLE_APPLICATION_CREDENTIALS"
-            value = "/var/secrets/google/key.json"
           }
         }
         volume {
@@ -313,12 +380,6 @@ resource "kubernetes_deployment" "jmeter-master" {
               path = "load_test"
               mode = "0755"
             }
-          }
-        }
-        volume {
-          name = "google-cloud-key"
-          secret {
-            secret_name = "sa-key"
           }
         }
       }
@@ -349,6 +410,7 @@ resource "kubernetes_stateful_set" "jmeter-slave" {
         }
       }
       spec {
+        service_account_name = "machmeter-ksa-new"
         container {
           image = "gcr.io/cloud-spanner-emulator/machmeter-jmeter-slave:latest"
           name  = "jmslave"
@@ -376,10 +438,6 @@ resource "kubernetes_stateful_set" "jmeter-slave" {
               cpu    = "1000m"
               memory = "2Gi"
             }
-          }
-          env {
-            name = "GOOGLE_APPLICATION_CREDENTIALS"
-            value = "/var/secrets/google/key.json"
           }
         }
         volume {
