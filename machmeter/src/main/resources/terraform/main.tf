@@ -185,7 +185,7 @@ resource "google_service_account_iam_policy" "app-service-account-iam" {
 
 data "google_iam_policy" "database-reader-policy" {
   binding {
-    role = "roles/spanner.databaseReader"
+    role = "roles/spanner.admin"
     members = [
       "serviceAccount:${google_service_account.app-service-account.email}"
     ]
