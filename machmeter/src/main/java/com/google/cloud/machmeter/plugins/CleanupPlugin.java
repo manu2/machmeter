@@ -49,7 +49,6 @@ public class CleanupPlugin implements Plugin<SetupConfig> {
     SpannerInstanceConfig spannerInstanceConfig =
         config.getInfraConfig().getSpannerInstanceConfig();
     GKEConfig gkeConfig = config.getInfraConfig().getGkeConfig();
-// TODO : clean up gsa and ksa
     String terraformDestroyCMD =
         String.format(
             "terraform destroy -var=gcp_project=%s -var='spanner_config=%s' -var='gke_config=%s'",

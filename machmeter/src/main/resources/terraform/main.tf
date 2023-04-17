@@ -185,7 +185,7 @@ resource "google_service_account_iam_policy" "app-service-account-iam" {
 
 data "google_iam_policy" "database-reader-policy" {
   binding {
-    role = "roles/owner"
+    role = "roles/spanner.databaseReader"
     members = [
       "serviceAccount:${google_service_account.app-service-account.email}"
     ]
@@ -218,20 +218,6 @@ resource "kubernetes_namespace" "namespace" {
     name = var.gke_config.namespace
   }
 }
-
-#resource "kubernetes_secret" "service_account" {
-#  metadata {
-#    name      = "sa-key"
-#    namespace = kubernetes_namespace.namespace.metadata.0.name
-#  }
-#  data = {
-#    "key.json" = file("${var.gke_config.service_account_json}")f
-#  }
-#}
-
-#resource "google_service_account" "service_account" {
-#  account_id = "kubesa"
-#}
 
 resource "kubernetes_config_map" "configmap_jmeter_load_test" {
   metadata {

@@ -73,23 +73,10 @@ public class GKEConfig {
   @Expose
   private String googleServiceAccount;
 
-  public void setGoogleServiceAccount(String googleServiceAccount) {
-    this.googleServiceAccount = googleServiceAccount;
-  }
-  public String getGoogleServiceAccount() {
-    return googleServiceAccount;
-  }
-
   @SerializedName(value = "kube_service_account", alternate = "kubeServiceAccount")
   @Expose
   private String kubeServiceAccount;
 
-  public void setKubeServiceAccount(String kubeServiceAccount) {
-    this.kubeServiceAccount = kubeServiceAccount;
-  }
-  public String getKubeServiceAccount() {
-    return kubeServiceAccount;
-  }
   public String getClusterName() {
     return clusterName;
   }
@@ -184,5 +171,20 @@ public class GKEConfig {
 
   public void setInitialNodeCount(int initialNodeCount) {
     this.initialNodeCount = initialNodeCount;
+  }
+
+  public void setGoogleServiceAccount(String googleServiceAccount) {
+    this.googleServiceAccount = googleServiceAccount;
+  }
+
+  public String getGoogleServiceAccount() {
+    return googleServiceAccount;
+  }
+
+  public void setKubeServiceAccount(String kubeServiceAccount) {
+    this.kubeServiceAccount = kubeServiceAccount;
+  }
+  public String getKubeServiceAccount() {
+    return kubeServiceAccount;
   }
 }
